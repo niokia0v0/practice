@@ -1,0 +1,57 @@
+TTN web payload formatter decode script:
+
+/**
+ * Decodes the uplink payload from a byte array into a JSON object.
+ * @param {Object} input - An object containing the payload bytes and port number.
+ * @param {number[]} input.bytes - An array of bytes representing the payload.
+ * @param {number} input.fPort - The FPort number on which the payload was received.
+ * @returns {Object} An object containing the decoded data, warnings, and errors.
+ */
+function decodeUplink(input) {
+  
+  // Create an empty object to store the decoded data.
+  var decoded = {};
+
+  // Check if the payload was received on the correct port (e.g., FPort 1, as defined in our Arduino code).
+  // This helps differentiate between sensor data and other types of messages.
+  if (input.fPort === 1) {
+    
+    // --- Decode Temperature ---
+    // The temperature is a 16-bit signed integer, sent in Big Endian format (most significant byte first).
+    // input.bytes[0] is the high byte, input.bytes[1] is the low byte.
+    
+    // Combine the two bytes into a single 16-bit raw value.
+    // The << 8 operator shifts the high byte 8 bits to the left.
+    // The | (bitwise OR) operator combines it with the low byte.
+    var tempRaw = (input.bytes[0] << 8) | input.bytes[1];
+
+    // Handle negative temperatures. In a 16-bit signed integer, if the value is
+    // greater than 32767 (or 0x7FFF), the most significant bit is 1, indicating a negative number.
+    // We convert it to its correct negative value using two's complement arithmetic.
+    if (tempRaw > 32767) {
+      tempRaw = tempRaw - 65536;
+    }
+    
+    // The value was multiplied by 10 in the Arduino code to preserve one decimal place.
+    // We divide by 10.0 to restore the original floating-point value.
+    decoded.temperature = tempRaw / 10.0;
+
+    // --- Decode Humidity ---
+    // The humidity is a 16-bit unsigned integer, also sent in Big Endian format.
+    // input.bytes[2] is the high byte, input.bytes[3] is the low byte.
+
+    // Combine the two bytes into a single 16-bit raw value.
+    var humRaw = (input.bytes[2] << 8) | input.bytes[3];
+
+    // The value was also multiplied by 10 in the Arduino code.
+    // We divide by 10.0 to restore the original value.
+    decoded.humidity = humRaw / 10.0;
+  }
+
+  // Return the final decoded object. The TTN platform expects this structure.
+  return {
+    data: decoded,
+    warnings: [],
+    errors: []
+  };
+}
